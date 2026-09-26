@@ -105,7 +105,7 @@ function App() {
 
     try {
       const response = await fetch(
-        "http://localhost:5000/api/profile/1",
+        "https://taskflow-lite-3ocy.onrender.com/api/profile/1",
         {
           method: "PUT",
           headers: {

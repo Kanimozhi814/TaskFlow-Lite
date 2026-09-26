@@ -5,6 +5,8 @@ function App() {
   const [profile, setProfile] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -12,50 +14,90 @@ function App() {
     bio: "",
   });
 
+  const [errors, setErrors] = useState({
+    name: "",
+    phone: "",
+    bio: "",
+  });
+
   useEffect(() => {
     fetch("http://localhost:5000/api/profile/1")
-      .then((response) => response.json())
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Failed to fetch profile");
+        }
+
+        return response.json();
+      })
       .then((result) => {
         if (result.success) {
           setProfile(result.data);
 
           setFormData({
-            name: result.data.name,
-            phone: result.data.phone,
+            name: result.data.name || "",
+            phone: result.data.phone || "",
             bio: result.data.bio || "",
           });
+        } else {
+          setError("Failed to load profile");
         }
       })
       .catch((error) => {
         console.error("Error fetching profile:", error);
+        setError("Unable to load profile. Please try again.");
       });
   }, []);
 
   const handleChange = (event) => {
+    const { name, value } = event.target;
+
     setFormData({
       ...formData,
-      [event.target.name]: event.target.value,
+      [name]: value,
     });
+
+    setErrors({
+      ...errors,
+      [name]: "",
+    });
+
+    setSuccessMessage("");
+    setError("");
+  };
+
+  const validateForm = () => {
+    const newErrors = {
+      name: "",
+      phone: "",
+      bio: "",
+    };
+
+    if (formData.name.trim() === "") {
+      newErrors.name = "Display Name is required";
+    } else if (formData.name.trim().length > 100) {
+      newErrors.name = "Display Name must be 100 characters or less";
+    }
+
+    if (formData.phone.trim() !== "") {
+      if (!/^[0-9]{10}$/.test(formData.phone.trim())) {
+        newErrors.phone = "Phone number must contain exactly 10 digits";
+      }
+    }
+
+    if (formData.bio.length > 250) {
+      newErrors.bio = "Short Bio must be 250 characters or less";
+    }
+
+    setErrors(newErrors);
+
+    return !newErrors.name && !newErrors.phone && !newErrors.bio;
   };
 
   const handleSave = async () => {
-    if (formData.name.trim() === "") {
-      alert("Display Name is required");
-      return;
-    }
+    setSuccessMessage("");
+    setError("");
 
-    if (formData.phone.trim() === "") {
-      alert("Phone Number is required");
-      return;
-    }
-
-    if (formData.bio.trim() === "") {
-      alert("Short Bio is required");
-      return;
-    }
-
-    if (!/^[0-9]{10}$/.test(formData.phone)) {
-      alert("Phone Number must contain exactly 10 digits");
+    if (!validateForm()) {
       return;
     }
 
@@ -69,22 +111,33 @@ function App() {
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify(formData),
+          body: JSON.stringify({
+            name: formData.name.trim(),
+            phone: formData.phone.trim(),
+            bio: formData.bio.trim(),
+          }),
         }
       );
 
       const result = await response.json();
 
-      if (result.success) {
-        setProfile(result.data);
-        setIsEditing(false);
-        alert("Profile updated successfully!");
-      } else {
-        alert("Failed to update profile");
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to update profile");
       }
+
+      setProfile(result.data);
+
+      setFormData({
+        name: result.data.name || "",
+        phone: result.data.phone || "",
+        bio: result.data.bio || "",
+      });
+
+      setIsEditing(false);
+      setSuccessMessage("Profile updated successfully");
     } catch (error) {
       console.error("Error updating profile:", error);
-      alert("Failed to update profile");
+      setError(error.message || "Failed to update profile");
     } finally {
       setIsSaving(false);
     }
@@ -92,16 +145,39 @@ function App() {
 
   const handleCancel = () => {
     setFormData({
-      name: profile.name,
-      phone: profile.phone,
+      name: profile.name || "",
+      phone: profile.phone || "",
       bio: profile.bio || "",
     });
 
+    setErrors({
+      name: "",
+      phone: "",
+      bio: "",
+    });
+
+    setError("");
+    setSuccessMessage("");
     setIsEditing(false);
   };
 
+  if (!profile && error) {
+    return (
+      <div className="profile-container">
+        <h1 className="title">TaskFlow Lite</h1>
+        <p className="error-message">{error}</p>
+      </div>
+    );
+  }
+
   if (!profile) {
-    return <h2>Loading...</h2>;
+    return (
+      <div className="profile-container">
+        <h1 className="title">TaskFlow Lite</h1>
+        <h2 className="subtitle">User Profile</h2>
+        <p>Loading...</p>
+      </div>
+    );
   }
 
   return (
@@ -109,6 +185,14 @@ function App() {
       <h1 className="title">TaskFlow Lite</h1>
 
       <h2 className="subtitle">User Profile</h2>
+
+      {successMessage && (
+        <p className="success-message">{successMessage}</p>
+      )}
+
+      {error && (
+        <p className="error-message">{error}</p>
+      )}
 
       {isEditing ? (
         <div>
@@ -119,7 +203,12 @@ function App() {
               name="name"
               value={formData.name}
               onChange={handleChange}
+              maxLength={100}
             />
+
+            {errors.name && (
+              <p className="field-error">{errors.name}</p>
+            )}
           </div>
 
           <div className="profile-field">
@@ -138,7 +227,13 @@ function App() {
               name="phone"
               value={formData.phone}
               onChange={handleChange}
+              maxLength={10}
+              inputMode="numeric"
             />
+
+            {errors.phone && (
+              <p className="field-error">{errors.phone}</p>
+            )}
           </div>
 
           <div className="profile-field">
@@ -148,7 +243,16 @@ function App() {
               name="bio"
               value={formData.bio}
               onChange={handleChange}
+              maxLength={250}
             />
+
+            <small>
+              {formData.bio.length}/250 characters
+            </small>
+
+            {errors.bio && (
+              <p className="field-error">{errors.bio}</p>
+            )}
           </div>
 
           <div className="button-container">
@@ -181,17 +285,25 @@ function App() {
 
           <div className="profile-field">
             <label>Phone Number</label>
-            <div className="profile-value">{profile.phone}</div>
+            <div className="profile-value">
+              {profile.phone || "Not provided"}
+            </div>
           </div>
 
           <div className="profile-field">
             <label>Short Bio</label>
-            <div className="profile-value">{profile.bio}</div>
+            <div className="profile-value">
+              {profile.bio || "Not provided"}
+            </div>
           </div>
 
           <button
             className="edit-button"
-            onClick={() => setIsEditing(true)}
+            onClick={() => {
+              setIsEditing(true);
+              setSuccessMessage("");
+              setError("");
+            }}
           >
             Edit
           </button>

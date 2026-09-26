@@ -21,7 +21,7 @@ function App() {
   });
 
   useEffect(() => {
-    fetch("http://localhost:5000/api/profile/1")
+    fetch("https://taskflow-lite-3ocy.onrender.com/api/profile/1")
       .then((response) => {
         if (!response.ok) {
           throw new Error("Failed to fetch profile");
